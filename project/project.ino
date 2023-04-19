@@ -7,8 +7,9 @@
 #define BUTTON_PIN 2
   bool humidifierOn = false;
 #define WATER_PIN A1
+  unsigned int lastSeenWater = 0;
   unsigned int waterLevel = 0;
-#define numTasks 2
+#define numTasks 3
 
 typedef struct task {
   int state;
@@ -121,7 +122,7 @@ void lcdUpdateWaterLevel()
   tft.setTextColor(ST7735_WHITE);
   tft.fillRect(69, 32, 128-69, 15, ST7735_BLACK); // change to fill black
   tft.setCursor(70, 32);
-  //tft.print(random() % 100);
+  tft.print(waterLevel);
 }
 
 void lcdUpdateHumidifier()
@@ -153,7 +154,19 @@ void lcdUpdateHumidifier()
 *
 */
 
+enum WATER_STATES {WATER_INIT};
 
+int waterTick(int state)
+{
+  switch(state)
+  {
+    case WATER_INIT:
+      lastSeenWater = waterLevel;
+      waterLevel = analogRead(WATER_PIN);
+      if (lastSeenWater != waterLevel) lcdUpdateWaterLevel();
+  }
+  return state;
+}
 
 /*
 *
@@ -237,6 +250,11 @@ void setup() {
   tasks[i].elapsedTime = 0;
   tasks[i].TickFct = &humTick;
   i++;
+
+  tasks[i].state = WATER_INIT;
+  tasks[i].period = 1000;
+  tasks[i].elapsedTime = 0;
+  tasks[i].TickFct = &waterTick;
 }
 
 void loop() {
