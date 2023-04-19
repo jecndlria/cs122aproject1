@@ -123,6 +123,8 @@ void lcdUpdateWaterLevel()
   tft.fillRect(69, 32, 128-69, 15, ST7735_BLACK); // change to fill black
   tft.setCursor(70, 32);
   tft.print(waterLevel);
+  tft.setCursor(84, 32);
+  tft.print("%");
 }
 
 void lcdUpdateHumidifier()
@@ -161,8 +163,9 @@ int waterTick(int state)
   switch(state)
   {
     case WATER_INIT:
+
       lastSeenWater = waterLevel;
-      waterLevel = analogRead(WATER_PIN);
+      waterLevel = map(analogRead(WATER_PIN), 20, 700, 0, 100);
       if (lastSeenWater != waterLevel) lcdUpdateWaterLevel();
   }
   return state;
@@ -190,10 +193,12 @@ int humTick(int state)
     case HUM_INIT:
       break;
     case HUM_OFF:
-      humidifierOn = false;          
+      humidifierOn = false; 
+      if (digitalRead(BUTTON_PIN) == LOW) humidifierButtonHeld = false;        
       break;
     case HUM_ON:
       humidifierOn = true;
+      if (digitalRead(BUTTON_PIN) == LOW) humidifierButtonHeld = false;
       break;
   }
   switch(state)
@@ -209,7 +214,7 @@ int humTick(int state)
         lcdUpdateHumidifier();
 
       }
-      else humidifierButtonHeld = false;
+      
       break;
     case HUM_ON:
       if (digitalRead(BUTTON_PIN) && !humidifierButtonHeld)
@@ -219,8 +224,6 @@ int humTick(int state)
         lcdUpdateHumidifier();
 
       }
-      else humidifierButtonHeld = false;
-
       break;
   }
   return state;
