@@ -10,6 +10,7 @@
   unsigned int lastSeenWater = 0;
   unsigned int waterLevel = 0;
 #define numTasks 3
+#define RELAY_PIN 4
 
 typedef struct task {
   int state;
@@ -211,6 +212,7 @@ int humTick(int state)
       {
         humidifierButtonHeld = true;
         state = HUM_ON;
+        digitalWrite(RELAY_PIN, LOW);
         lcdUpdateHumidifier();
 
       }
@@ -221,6 +223,7 @@ int humTick(int state)
       {
         humidifierButtonHeld = true;
         state = HUM_OFF;
+        digitalWrite(RELAY_PIN, HIGH);
         lcdUpdateHumidifier();
 
       }
@@ -240,6 +243,7 @@ void setup() {
   // put your setup code here, to run once:
   Serial.begin(9600);
   pinMode(BUTTON_PIN, INPUT);
+  pinMode(RELAY_PIN, INPUT);
   initializeScreen();
   unsigned char i = 0;
   tasks[i].state = DHT_INIT;
