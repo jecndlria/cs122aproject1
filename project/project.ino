@@ -13,15 +13,26 @@
 #define WATER_PIN A1
   unsigned int lastSeenWater = 0;
   unsigned int waterLevel = 0;
-#define numTasks 4
+#define numTasks 3
+// #define numTasks 4
 #define RELAY_PIN 6
 #define IR_PIN 4
   IRrecv irrecv(IR_PIN);
   decode_results results;
   bool switchThresh = false;
-  bool switchTimer = true;
+  bool switchTimer = false;
+  String humidityThresholdString = "";
+  int humidityThreshold = 0;
+  String humidifierTimerString = "";
+  int humidifierTimer = 0;
   // Todo: State Machine for IR
+    // Update bools to pass into hum state machine to know when to switch (then immediately set to false)
+    // Press button mode, then input 2 numbers
+      // Thresh: Hum %
+      // Timer: # of minutes (use millis())
   // LCD prints status for timer and threshold mode
+    // Print input as it comes in
+    // Modify update humidifer status function to take a param to print current mode
 
 
 typedef struct task {
@@ -140,15 +151,25 @@ void lcdUpdateWaterLevel()
   tft.print("%");
 }
 
-void lcdUpdateHumidifier()
+void lcdUpdateHumidifier(int mode = 0)
 {
   tft.setTextColor(ST7735_WHITE);
   tft.fillRect(39, 48, 128-39, 15, ST7735_BLACK); // change to fill black
   tft.setCursor(40, 48);
-  if (humidifierOn)
+  if (mode == 1)
   {
     tft.setTextColor(ST7735_GREEN);
-    tft.println("ON");
+    tft.println("THRESHOLD");
+  }
+  else if (mode == 2)
+  {
+    tft.setTextColor(ST7735_GREEN);
+    tft.println("TIMER");
+  }
+  else if (humidifierOn)
+  {
+    tft.setTextColor(ST7735_GREEN);
+    tft.println("ON");    
   }
   else
   {
@@ -282,6 +303,127 @@ enum IR_STATES {IR_INIT, IR_WAIT, IR_READ_THRESH, IR_READ_TIMER};
 #define thresholdModeButton 0xEC130707 // PRE-CH
 #define timerModeButton 0xDC230707     // -
 
+int irTick(int state)
+{
+  switch(state)
+  {
+    case IR_INIT:
+      break;
+    case IR_WAIT:
+      break;
+    case IR_READ_THRESH:
+      if (irrecv.decode())
+      {
+        switch(irrecv.decodedIRData.decodedRawData)
+        {
+          case IR0:
+            humidityThresholdString += "0";
+            break;          
+          case IR1:
+            humidityThresholdString += "1";
+            break;
+          case IR2:
+            humidityThresholdString += "2";
+            break;
+          case IR3:
+            humidityThresholdString += "3";
+            break;
+          case IR4:
+            humidityThresholdString += "4";
+            break;
+          case IR5:
+            humidityThresholdString += "5";
+            break;
+          case IR6:
+            humidityThresholdString += "6";
+            break;
+          case IR7:
+            humidityThresholdString += "7";
+            break;
+          case IR8:
+            humidityThresholdString += "8";
+            break;
+          case IR9:
+            humidityThresholdString += "9";
+            break;
+           
+        }
+      }
+      break;
+    case IR_READ_TIMER:
+      if (irrecv.decode())
+      {
+        switch(irrecv.decodedIRData.decodedRawData)
+        {
+          case IR0:
+            humidifierTimerString += "0";
+            break;          
+          case IR1:
+            humidifierTimerString += "1";
+            break;
+          case IR2:
+            humidifierTimerString += "2";
+            break;
+          case IR3:
+            humidifierTimerString += "3";
+            break;
+          case IR4:
+            humidifierTimerString += "4";
+            break;
+          case IR5:
+            humidifierTimerString += "5";
+            break;
+          case IR6:
+            humidifierTimerString += "6";
+            break;
+          case IR7:
+            humidifierTimerString += "7";
+            break;
+          case IR8:
+            humidifierTimerString += "8";
+            break;
+          case IR9:
+            humidifierTimerString += "9";
+            break;
+        }
+      }
+      break;
+  }
+
+  switch(state)
+  {
+    case IR_INIT:
+      state = IR_WAIT;
+      break;
+    case IR_WAIT:
+      if (irrecv.decode() && irrecv.decodedIRData.decodedRawData == thresholdModeButton) 
+      {
+        humidityThresholdString = "";
+        state = IR_READ_THRESH;
+      }
+      else if (irrecv.decode() && irrecv.decodedIRData.decodedRawData == timerModeButton) 
+      {
+        humidifierTimerString = "";
+        state = IR_READ_TIMER;
+      }
+      irrecv.resume();
+      break;
+    case IR_READ_THRESH:
+      if (humidityThresholdString.length() == 2) 
+      {
+        state = IR_WAIT;
+      }
+      break;
+    case IR_READ_TIMER:
+      if (humidifierTimerString.length() == 2) 
+      {
+        state = IR_WAIT;
+      }
+      break;
+  }
+  return state;
+}
+
 /*
 *
 * IR
@@ -317,10 +459,12 @@ void setup() {
   tasks[i].TickFct = &waterTick;
   i++;
 
+  /*
   tasks[i].state = IR_INIT;
   tasks[i].period = 500;
   tasks[i].elapsedTime = 0;
   tasks[i].TickFct = &irTick;  
+  */
 }
 
 void loop() {
