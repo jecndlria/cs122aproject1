@@ -1,16 +1,19 @@
+#include <SoftwareSerial.h>
+SoftwareSerial esp8266(3, 4);
+
+#include <Adafruit_ESP8266.h>
 #include <Adafruit_ST7735.h>
 #include <Adafruit_ST7789.h>
 #include <Adafruit_ST77xx.h>
 #include <EduIntro.h>
-
 
 #define BUTTON_PIN 2
   bool humidifierOn = false;
 #define WATER_PIN A1
   unsigned int lastSeenWater = 0;
   unsigned int waterLevel = 0;
-#define numTasks 3
-#define RELAY_PIN 4
+#define numTasks 4
+#define RELAY_PIN 6
 
 typedef struct task {
   int state;
@@ -23,7 +26,7 @@ task tasks[numTasks];
 
 /*
 *
-* MOVE TO DHT.H
+* DHT
 *
 */
 #define DHT_PIN A0
@@ -36,7 +39,7 @@ int lastSeenHumidity;
 DHT11 dht11(DHT_PIN);
 /*
 *
-* MOVE TO DHT.H
+* DHT
 *
 */
 
@@ -61,7 +64,7 @@ int dhtTick(int state)
 
 /* 
 *
-* MOVE TO LCD.H
+* LCD
 *
 */
 
@@ -147,13 +150,13 @@ void lcdUpdateHumidifier()
 
 /* 
 *
-* MOVE TO LCD.H
+* LCD
 *
 */
 
 /*
 *
-* MOVE TO WATER.H
+* Water Sensor
 *
 */
 
@@ -174,13 +177,13 @@ int waterTick(int state)
 
 /*
 *
-* MOVE TO WATER.H
+* Water Sensor
 *
 */
 
 /*
 *
-* MOVE TO HUMIDIFIER.H
+* Humidifier
 *
 */
 
@@ -212,7 +215,7 @@ int humTick(int state)
       {
         humidifierButtonHeld = true;
         state = HUM_ON;
-        digitalWrite(RELAY_PIN, LOW);
+        digitalWrite(RELAY_PIN, HIGH);
         lcdUpdateHumidifier();
 
       }
@@ -223,7 +226,7 @@ int humTick(int state)
       {
         humidifierButtonHeld = true;
         state = HUM_OFF;
-        digitalWrite(RELAY_PIN, HIGH);
+        digitalWrite(RELAY_PIN, LOW);
         lcdUpdateHumidifier();
 
       }
@@ -235,7 +238,13 @@ int humTick(int state)
 
 /*
 *
-* MOVE TO HUMIDIFIER.H
+* IR
+*
+*/
+
+/*
+*
+* IR
 *
 */
 
@@ -243,17 +252,18 @@ void setup() {
   // put your setup code here, to run once:
   Serial.begin(9600);
   pinMode(BUTTON_PIN, INPUT);
-  pinMode(RELAY_PIN, INPUT);
+  pinMode(RELAY_PIN, OUTPUT);
+  digitalWrite(RELAY_PIN, HIGH);
   initializeScreen();
   unsigned char i = 0;
   tasks[i].state = DHT_INIT;
-  tasks[i].period = 10;
+  tasks[i].period = 100;
   tasks[i].elapsedTime = 0;
   tasks[i].TickFct = &dhtTick;
   i++;
 
   tasks[i].state = HUM_INIT;
-  tasks[i].period = 10;
+  tasks[i].period = 100;
   tasks[i].elapsedTime = 0;
   tasks[i].TickFct = &humTick;
   i++;
@@ -262,6 +272,12 @@ void setup() {
   tasks[i].period = 1000;
   tasks[i].elapsedTime = 0;
   tasks[i].TickFct = &waterTick;
+  i++;
+
+  tasks[i].state = WATER_INIT;
+  tasks[i].period = 1000;
+  tasks[i].elapsedTime = 0;
+  tasks[i].TickFct = &waterTick;  
 }
 
 void loop() {
