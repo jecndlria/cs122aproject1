@@ -1,6 +1,7 @@
-#include <SoftwareSerial.h>
-SoftwareSerial esp8266(3, 4);
+// #include <SoftwareSerial.h>
+// SoftwareSerial esp8266(3, 4);
 
+#include <IRremote.h>
 #include <Adafruit_ESP8266.h>
 #include <Adafruit_ST7735.h>
 #include <Adafruit_ST7789.h>
@@ -14,6 +15,14 @@ SoftwareSerial esp8266(3, 4);
   unsigned int waterLevel = 0;
 #define numTasks 4
 #define RELAY_PIN 6
+#define IR_PIN 4
+  IRrecv irrecv(IR_PIN);
+  decode_results results;
+  bool switchThresh = false;
+  bool switchTimer = true;
+  // Todo: State Machine for IR
+  // LCD prints status for timer and threshold mode
+
 
 typedef struct task {
   int state;
@@ -235,12 +244,43 @@ int humTick(int state)
   return state;
 }
 
-
 /*
 *
 * IR
 *
 */
+
+/* Deleted to save memory
+long irLookup[10] = 
+{0xEE110707,
+0xFB040707,
+0xFA050707,
+0xF9060707,
+0xF7080707,
+0xF6090707,
+0xF50A0707,
+0xF30C0707,
+0xF20D0707,
+0xF10E0707};
+*/
+
+// Samsung TV remote
+
+enum IR_STATES {IR_INIT, IR_WAIT, IR_READ_THRESH, IR_READ_TIMER};
+
+#define IR0 0xEE110707
+#define IR1 0xFB040707
+#define IR2 0xFA050707
+#define IR3 0xF9060707
+#define IR4 0xF7080707
+#define IR5 0xF6090707
+#define IR6 0xF50A0707
+#define IR7 0xF30C0707
+#define IR8 0xF20D0707
+#define IR9 0xF10E0707
+
+#define thresholdModeButton 0xEC130707 // PRE-CH
+#define timerModeButton 0xDC230707     // -
 
 /*
 *
@@ -255,6 +295,9 @@ void setup() {
   pinMode(RELAY_PIN, OUTPUT);
   digitalWrite(RELAY_PIN, HIGH);
   initializeScreen();
+  irrecv.enableIRIn();
+  irrecv.blink13(true);
+
   unsigned char i = 0;
   tasks[i].state = DHT_INIT;
   tasks[i].period = 100;
@@ -274,10 +317,10 @@ void setup() {
   tasks[i].TickFct = &waterTick;
   i++;
 
-  tasks[i].state = WATER_INIT;
-  tasks[i].period = 1000;
+  tasks[i].state = IR_INIT;
+  tasks[i].period = 500;
   tasks[i].elapsedTime = 0;
-  tasks[i].TickFct = &waterTick;  
+  tasks[i].TickFct = &irTick;  
 }
 
 void loop() {
