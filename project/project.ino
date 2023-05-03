@@ -13,9 +13,8 @@
 #define WATER_PIN A1
   unsigned int lastSeenWater = 0;
   unsigned int waterLevel = 0;
-#define numTasks 3
-// #define numTasks 4
-#define RELAY_PIN 6 // Low is on, high is off
+#define numTasks 4
+#define RELAY_PIN 6
 #define IR_PIN 4
   IRrecv irrecv(IR_PIN);
   decode_results results;
@@ -25,15 +24,7 @@
   int humidityThreshold = 0;
   String humidifierTimerString = "";
   unsigned long humidifierTimer = 0;
-  // Todo: State Machine for IR
-    // Update bools to pass into hum state machine to know when to switch (then immediately set to false)
-    // Press button mode, then input 2 numbers
-      // Thresh: Hum %
-      // Timer: # of minutes (use millis())
-  // LCD prints status for timer and threshold mode
-    // Print input as it comes in
-    // Modify update humidifer status function to take a param to print current mode
-
+  unsigned int humidifierTimerMinutes = 0; 
 
 typedef struct task {
   int state;
@@ -123,14 +114,12 @@ void initializeScreen()
   tft.println("OFF");
 }
 
-
 void lcdUpdateTemp()
 {
   tft.setTextColor(ST7735_WHITE);
   tft.fillRect(88, 0, 128-88, 15, ST7735_BLACK); // change to fill black
   tft.setCursor(89, 0);
   tft.print(fahrenheit);
-
 }
 
 void lcdUpdateHumidity()
@@ -138,7 +127,7 @@ void lcdUpdateHumidity()
   tft.setTextColor(ST7735_WHITE);
   tft.fillRect(51, 16, 128-51, 15, ST7735_BLACK); // change to fill black
   tft.setCursor(52, 16);
-  tft.print(humidity);
+  tft.print(String(humidity) + "%");
 }
 
 void lcdUpdateWaterLevel()
@@ -162,14 +151,14 @@ void lcdUpdateHumidifier(int mode = 0)
   if (mode == MODE_THRESH)
   {
     tft.setTextColor(ST7735_YELLOW);
-    tft.println("THRESHOLD");
+    tft.println("THRESHOLD " + humidityThresholdString + "%");
   }
   else if (mode == MODE_TIMER)
   {
     tft.setTextColor(ST7735_YELLOW);
-    tft.println("TIMER");
+    tft.println("TIMER " + String(humidifierTimerMinutes) + " MIN");
   }
-  else if (humidifierOn)
+  else if (humidifierOn && mode == 0)
   {
     tft.setTextColor(ST7735_GREEN);
     tft.println("ON");    
@@ -222,6 +211,9 @@ int waterTick(int state)
 
 enum HUM_STATES {HUM_INIT, HUM_OFF, HUM_ON, HUM_THRESH, HUM_TIMER};
 bool humidifierButtonHeld = false;
+unsigned long lastSeenTime = 0;
+
+#define THRESHOLD_CONSTANT 120000   // 2 minutes in ms, timer for threshold so the humidifier doesn't constantly turn on/off
 
 int humTick(int state)
 {
@@ -238,13 +230,22 @@ int humTick(int state)
       if (digitalRead(BUTTON_PIN) == LOW) humidifierButtonHeld = false;
       break;
     case HUM_THRESH:
-      humidifierOn = true;   
-      if (humidity > humidityThreshold) digitalWrite(RELAY_PIN, HIGH);
-      else digitalWrite(RELAY_PIN, LOW);
+      if (humidity >= humidityThreshold)
+      {
+        humidifierOn = false;
+        digitalWrite(RELAY_PIN, HIGH);
+      }
+      else if (!humidifierOn && (millis() - lastSeenTime) >= THRESHOLD_CONSTANT)
+      {
+        lastSeenTime = millis();
+        humidifierOn = true;
+        digitalWrite(RELAY_PIN, LOW);
+      }
       if (digitalRead(BUTTON_PIN) == LOW) humidifierButtonHeld = false;
       break;
     case HUM_TIMER:
       humidifierOn = true;
+      if (digitalRead(BUTTON_PIN) == LOW) humidifierButtonHeld = false;
       break;
   }
   switch(state)
@@ -262,12 +263,18 @@ int humTick(int state)
       }
       else if (switchThresh)
       {
+        switchThresh = false;
+        lastSeenTime = 0;
         state = HUM_THRESH;
         lcdUpdateHumidifier(MODE_THRESH);
       }
       else if (switchTimer)
       {
+        switchTimer = false;
+        lastSeenTime = millis();
+        humidifierTimer = humidifierTimerMinutes * 60000;        
         state = HUM_TIMER;
+        digitalWrite(RELAY_PIN, LOW);
         lcdUpdateHumidifier(MODE_TIMER);
       }
       break;
@@ -281,19 +288,80 @@ int humTick(int state)
       }
       else if (switchThresh)
       {
+        switchThresh = false;
+        lastSeenTime = 0;
         state = HUM_THRESH;
         lcdUpdateHumidifier(MODE_THRESH);
-
       }
       else if (switchTimer)
       {
+        switchTimer = false;
+        lastSeenTime = millis();
+        humidifierTimer = humidifierTimerMinutes * 60000;        
         state = HUM_TIMER;
+        digitalWrite(RELAY_PIN, LOW);
         lcdUpdateHumidifier(MODE_TIMER);
       }
       break;
     case HUM_THRESH:
+      if (digitalRead(BUTTON_PIN) && !humidifierButtonHeld)
+        {
+          humidifierButtonHeld = true;
+          state = HUM_OFF;
+          digitalWrite(RELAY_PIN, HIGH);
+          lcdUpdateHumidifier();
+        }
+        else if (switchThresh)
+        {
+          switchThresh = false;
+          lastSeenTime = 0;
+          state = HUM_THRESH;
+          lcdUpdateHumidifier(MODE_THRESH);
+
+        }
+        else if (switchTimer)
+        {
+          switchTimer = false;
+          lastSeenTime = millis();
+          humidifierTimer = humidifierTimerMinutes * 60000;        
+          state = HUM_TIMER;
+          digitalWrite(RELAY_PIN, LOW);
+          lcdUpdateHumidifier(MODE_TIMER);
+        }
       break;
     case HUM_TIMER:
+      if (millis() - lastSeenTime >= humidifierTimer) 
+      {
+        humidifierOn = false;
+        humidifierButtonHeld = true;
+        state = HUM_OFF;
+        digitalWrite(RELAY_PIN, HIGH);
+        lcdUpdateHumidifier();
+      }
+      else if (digitalRead(BUTTON_PIN) && !humidifierButtonHeld)
+      {
+        humidifierOn = false;
+        humidifierButtonHeld = true;
+        state = HUM_OFF;
+        digitalWrite(RELAY_PIN, HIGH);
+        lcdUpdateHumidifier();
+      }
+      else if (switchThresh)
+      {
+        switchThresh = false;
+        lastSeenTime = 0;
+        state = HUM_THRESH;
+        lcdUpdateHumidifier(MODE_THRESH);
+      }
+      else if (switchTimer)
+      {
+        switchTimer = false;
+        lastSeenTime = millis();
+        humidifierTimer = humidifierTimerMinutes * 60000;        
+        state = HUM_TIMER;
+        digitalWrite(RELAY_PIN, LOW);
+        lcdUpdateHumidifier(MODE_TIMER);
+      }
       break;
   }
   return state;
@@ -335,7 +403,7 @@ enum IR_STATES {IR_INIT, IR_WAIT, IR_READ_THRESH, IR_READ_TIMER};
 #define IR9 0xF10E0707
 
 #define thresholdModeButton 0xEC130707 // PRE-CH
-#define timerModeButton 0xDC230707     // -
+#define timerModeButton     0xDC230707     // -
 
 int irTick(int state)
 {
@@ -385,6 +453,8 @@ int irTick(int state)
             break;
         }
         humidityThreshold = humidityThresholdString.toInt();
+        irrecv.resume();
+
       }
 
       break;
@@ -427,8 +497,10 @@ int irTick(int state)
             humidifierTimerString += "1";
             break;        
         }
-        humidifierTimer = humidifierTimerString.toInt();
+        humidifierTimerMinutes = humidifierTimerString.toInt();
+        irrecv.resume();
       }
+      
       break;
   }
 
@@ -438,15 +510,18 @@ int irTick(int state)
       state = IR_WAIT;
       break;
     case IR_WAIT:
-      if (irrecv.decode() && irrecv.decodedIRData.decodedRawData == thresholdModeButton) 
+      if (irrecv.decode()) 
       {
-        humidityThresholdString = "";
-        state = IR_READ_THRESH;
-      }
-      else if (irrecv.decode() && irrecv.decodedIRData.decodedRawData == timerModeButton) 
-      {
-        humidifierTimerString = "";
-        state = IR_READ_TIMER;
+        if (irrecv.decodedIRData.decodedRawData == thresholdModeButton)
+        {
+          humidityThresholdString = "";
+          state = IR_READ_THRESH;
+        }
+        else if (irrecv.decodedIRData.decodedRawData == timerModeButton)
+        {
+          humidifierTimerString = "";
+          state = IR_READ_TIMER;
+        }
       }
       irrecv.resume();
       break;
@@ -486,7 +561,7 @@ void setup() {
 
   unsigned char i = 0;
   tasks[i].state = DHT_INIT;
-  tasks[i].period = 100;
+  tasks[i].period = 1000;
   tasks[i].elapsedTime = 0;
   tasks[i].TickFct = &dhtTick;
   i++;
@@ -504,7 +579,7 @@ void setup() {
   i++;
 
   tasks[i].state = IR_INIT;
-  tasks[i].period = 500;
+  tasks[i].period = 100;
   tasks[i].elapsedTime = 0;
   tasks[i].TickFct = &irTick;  
   
