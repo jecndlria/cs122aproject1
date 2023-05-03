@@ -248,7 +248,7 @@ int humTick(int state)
       
       if (millis() - minuteTimer > 60000) 
       {
-        Serial.println("I am here, millis value: " + String(millis()) + " minuteTimer value: " + String(minuteTimer));
+        //Serial.println("I am here, millis value: " + String(millis()) + " minuteTimer value: " + String(minuteTimer));
         minuteTimer = millis();
         humidifierTimerMinutes--;
         lcdUpdateHumidifier(MODE_TIMER);   
@@ -526,9 +526,11 @@ int irTick(int state)
   switch(state)
   {
     case IR_INIT:
+      irrecv.enableIRIn();
       state = IR_WAIT;
       break;
     case IR_WAIT:
+      
       if (irrecv.decode()) 
       {
         if (irrecv.decodedIRData.decodedRawData == thresholdModeButton)
@@ -552,14 +554,16 @@ int irTick(int state)
       if (humidityThresholdString.length() == 2) 
       {
         switchThresh = true;
-        state = IR_WAIT;
+        irrecv.end();
+        state = IR_INIT;
       }
       break;
     case IR_READ_TIMER:
       if (humidifierTimerString.length() == 3) 
       {
         switchTimer = true;
-        state = IR_WAIT;
+        irrecv.end();
+        state = IR_INIT;
       }
       break;
   }
@@ -579,7 +583,6 @@ void setup() {
   pinMode(RELAY_PIN, OUTPUT);
   digitalWrite(RELAY_PIN, HIGH);
   initializeScreen();
-  irrecv.enableIRIn();
   irrecv.blink13(true);
 
   unsigned char i = 0;
@@ -590,7 +593,7 @@ void setup() {
   i++;
 
   tasks[i].state = HUM_INIT;
-  tasks[i].period = 200;
+  tasks[i].period = 100;
   tasks[i].elapsedTime = 0;
   tasks[i].TickFct = &humTick;
   i++;
