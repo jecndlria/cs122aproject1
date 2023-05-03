@@ -1,31 +1,66 @@
 // #include <SoftwareSerial.h>
 // SoftwareSerial esp8266(3, 4);
-
-#include <IRremote.h>
 // #include <Adafruit_ESP8266.h>
+
+// Humidifier Declarations
+#define BUTTON_PIN 2
+  bool humidifierOn = false;          
+  bool humidifierButtonHeld = false;  // Prevent button holds from registering
+#define WATER_PIN A1
+  unsigned int lastSeenWater = 0;     // Prevents unnecessary updates
+  unsigned int waterLevel = 0;
+#define RELAY_PIN 6
+  unsigned long lastSeenTime = 0;     // Used for timer mode
+  unsigned long minuteTimer = 0;      // Used to provide live countdown of timer in minutes
+
+// IR Declarations
+#include <IRremote.h>
+#define IR_PIN 4
+#define IR0 0xEE110707
+#define IR1 0xFB040707
+#define IR2 0xFA050707
+#define IR3 0xF9060707
+#define IR4 0xF7080707
+#define IR5 0xF6090707
+#define IR6 0xF50A0707
+#define IR7 0xF30C0707
+#define IR8 0xF20D0707
+#define IR9 0xF10E0707
+#define thresholdModeButton 0xEC130707     // PRE-CH
+#define timerModeButton     0xDC230707     // -
+#define powerButton         0xFD020707     // Power
+  IRrecv irrecv(IR_PIN);
+  decode_results results;
+  bool switchThresh = false;               // Flag from IR state machine to Humidifier state machine
+  bool switchTimer = false;                // Flag from IR state machine to Humidifier state machine
+  bool powerButtonFlag = false;            // Flag from IR state machine to Humidifier state machine   
+  String humidityThresholdString = "";     // Built in IR state machine, converted to int
+  int humidityThreshold = 0;
+  String humidifierTimerString = "";       // Built in IR state machine, converted to int
+  unsigned long humidifierTimer = 0;       // Used in translation from min -> ms
+  unsigned int humidifierTimerMinutes = 0; 
+
+// DHT Declarations
+#include <EduIntro.h>
+#define DHT_PIN A0
+  float fahrenheit;
+  float lastSeenFahrenheit;   // Prevents unnecessary updates
+  int humidity; 
+  int lastSeenHumidity;       // Prevents unnecessary updates
+  DHT11 dht11(DHT_PIN);
+
+// LCD Screen
 #include <Adafruit_ST7735.h>
 #include <Adafruit_ST7789.h>
 #include <Adafruit_ST77xx.h>
-#include <EduIntro.h>
-
-#define BUTTON_PIN 2
-  bool humidifierOn = false;
-#define WATER_PIN A1
-  unsigned int lastSeenWater = 0;
-  unsigned int waterLevel = 0;
+#define TFT_CS 10
+#define TFT_RESET 8
+#define TFT_A0 9
+#define TFT_SDA 11
+#define TFT_SCK 13
+  Adafruit_ST7735 tft = Adafruit_ST7735(TFT_CS, TFT_A0, TFT_SDA, TFT_SCK, TFT_RESET);
+  
 #define numTasks 4
-#define RELAY_PIN 6
-#define IR_PIN 4
-  IRrecv irrecv(IR_PIN);
-  decode_results results;
-  bool switchThresh = false;
-  bool switchTimer = false;
-  bool powerButtonFlag = false;
-  String humidityThresholdString = "";
-  int humidityThreshold = 0;
-  String humidifierTimerString = "";
-  unsigned long humidifierTimer = 0;
-  unsigned int humidifierTimerMinutes = 0; 
 
 typedef struct task {
   int state;
@@ -36,19 +71,6 @@ typedef struct task {
 
 task tasks[numTasks];
 
-/*
-*
-* DHT
-*
-*/
-#define DHT_PIN A0
-
-float fahrenheit;
-float lastSeenFahrenheit;
-int humidity; 
-int lastSeenHumidity;
-
-DHT11 dht11(DHT_PIN);
 /*
 *
 * DHT
@@ -74,20 +96,17 @@ int dhtTick(int state)
   return state;  
 }
 
+/*
+*
+* DHT
+*
+*/
+
 /* 
 *
 * LCD
 *
 */
-
-// LCD Screen Pins
-#define TFT_CS 10
-#define TFT_RESET 8
-#define TFT_A0 9
-#define TFT_SDA 11
-#define TFT_SCK 13
-
-Adafruit_ST7735 tft = Adafruit_ST7735(TFT_CS, TFT_A0, TFT_SDA, TFT_SCK, TFT_RESET);
 
 void initializeScreen()
 {
@@ -211,9 +230,6 @@ int waterTick(int state)
 */
 
 enum HUM_STATES {HUM_INIT, HUM_OFF, HUM_ON, HUM_THRESH, HUM_TIMER};
-bool humidifierButtonHeld = false;
-unsigned long lastSeenTime = 0;
-unsigned long minuteTimer = 0;
 
 int humTick(int state)
 {
@@ -391,38 +407,9 @@ int humTick(int state)
 *
 */
 
-/* Deleted to save memory
-long irLookup[10] = 
-{0xEE110707,
-0xFB040707,
-0xFA050707,
-0xF9060707,
-0xF7080707,
-0xF6090707,
-0xF50A0707,
-0xF30C0707,
-0xF20D0707,
-0xF10E0707};
-*/
-
 // Samsung TV remote
 
 enum IR_STATES {IR_INIT, IR_WAIT, IR_READ_THRESH, IR_READ_TIMER};
-
-#define IR0 0xEE110707
-#define IR1 0xFB040707
-#define IR2 0xFA050707
-#define IR3 0xF9060707
-#define IR4 0xF7080707
-#define IR5 0xF6090707
-#define IR6 0xF50A0707
-#define IR7 0xF30C0707
-#define IR8 0xF20D0707
-#define IR9 0xF10E0707
-
-#define thresholdModeButton 0xEC130707     // PRE-CH
-#define timerModeButton     0xDC230707     // -
-#define powerButton         0xFD020707     // Power
 
 int irTick(int state)
 {
